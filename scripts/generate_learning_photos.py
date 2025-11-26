@@ -3,7 +3,7 @@ import random
 import matplotlib.pyplot as plt
 
 # Create output folder
-OUTPUT_DIR = "dataset"
+OUTPUT_DIR = "../dataset"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Pool of math formulas (you can expand later)
