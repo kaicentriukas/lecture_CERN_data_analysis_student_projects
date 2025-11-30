@@ -66,3 +66,18 @@ def predict_formula(model_path, tokenizer, image_path, beam_width, max_len = 150
     return latex
 
 # Example
+if __name__ == '__main__': #to make sure it runs only  when i run this script
+    # Paths (replace with your actual files)
+    MODEL_PATH = "model.h5"
+    IMAGE_PATH = "example_formula.png"
+    TOKENIZER_PATH = "tokenizer.pkl"
+
+        # Load tokenizer
+    if not os.path.exists(TOKENIZER_PATH):
+        raise FileNotFoundError(f"Tokenizer file not found: {TOKENIZER_PATH}")
+    with open(TOKENIZER_PATH, "rb") as f:
+        tokenizer = pickle.load(f)
+
+        # Predict
+    predicted_latex = predict_formula(MODEL_PATH, tokenizer, IMAGE_PATH, beam_width=3)
+    print("\nFinal LaTeX prediction:", predicted_latex)
