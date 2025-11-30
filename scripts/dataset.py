@@ -39,16 +39,36 @@ def preprocess_image(img):
     return img
 
 
-#To not overload memory, we create a tf dataset generator
+# To not overload memory, we create a tf dataset generator
 def create_tf_dataset(images, sequences, batch_size=32):
+
+    # sequences must already be lists of int token IDs
+
     def gen():
         for img, seq in zip(images, sequences):
-            yield preprocess_image(img), seq #send one image and one latex sequence at a time, to not overload memory
 
-    return tf.data.Dataset.from_generator( 
+            # seq is like: [SOS, t1, t2, ..., tN, EOS]
+
+            decoder_in  = seq[:-1]   # remove EOS
+            decoder_out = seq[1:]    # remove SOS
+
+            yield (preprocess_image(img), decoder_in), decoder_out
+
+
+    return tf.data.Dataset.from_generator(
         gen,
         output_signature=(
-            tf.TensorSpec(shape=(IMG_SIZE[0], IMG_SIZE[1], 1), dtype=tf.float32), #tells what size the output will be (128, 256, 1)
-            tf.TensorSpec(shape=(None,), dtype=tf.int32), #tells what size the output will be (None for variable length sequences)
+            (
+                tf.TensorSpec(shape=(IMG_SIZE[0], IMG_SIZE[1], 1), dtype=tf.float32),
+                tf.TensorSpec(shape=(None,), dtype=tf.int32)
+            ),
+            tf.TensorSpec(shape=(None,), dtype=tf.int32)
         )
-    ).padded_batch(batch_size, padded_shapes=([*IMG_SIZE, 1], [None])).prefetch(2)
+    ).padded_batch(
+        batch_size,
+        padded_shapes=(
+            ([*IMG_SIZE, 1], [None]),   # image and decoder_in
+            [None]                      # decoder_out
+        )
+    ).repeat.prefetch(2) #repeat important for learning
+
