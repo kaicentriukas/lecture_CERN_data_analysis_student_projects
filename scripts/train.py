@@ -5,17 +5,9 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Load data
 
-ds = load_mathwriting()
-
-# Extract formulas(LaTex labels) and images
-latex_texts = []
-images = []
-
-for item in ds['train'][:20000]: #right now limiting the amount data loaded
-    latex_texts.append(item['latex'])
-    images.append(item['image'])
+# Load first 20k samples
+images, latex_texts = load_mathwriting(limit=20000)
 
 # Tokenizer (assign text to numbers)
 tokenizer = create_char_tokenizer(latex_texts)
@@ -45,7 +37,7 @@ model.summary()
 
 # Training loop
 epochs = 5
-history = model.fit(train_dataset, epochs)
+history = model.fit(train_dataset, epochs = epochs)
 
 # Save trained model
 model.save('model.h5')
