@@ -75,7 +75,7 @@ def preprocess_image(img):
 # ---------------------------------------------------------
 # EXTREMELY FAST TF.DATA CREATION
 # ---------------------------------------------------------
-def create_tf_dataset(images, sequences, batch_size=32):
+def create_tf_dataset(images, sequences, batch_size=32, augment=False):
     """
     This version converts *everything* to TensorFlow tensors first,
     then slices without Python overhead. 10–20× faster.
@@ -94,10 +94,23 @@ def create_tf_dataset(images, sequences, batch_size=32):
         ((images, decoder_in), decoder_out)
     )
 
-    # Shuffle → batch → prefetch
+    # Optional light augmentation for training pipeline
+    if augment:
+        def aug_fn(x):
+            img, dec_in = x
+            img = tf.image.random_brightness(img, max_delta=0.05)
+            img = tf.image.random_contrast(img, lower=0.95, upper=1.05)
+            img = tf.image.random_flip_left_right(img)
+            noise = tf.random.normal(tf.shape(img), mean=0.0, stddev=0.01, dtype=img.dtype)
+            img = tf.clip_by_value(img + noise, 0.0, 1.0)
+            return (img, dec_in)
+
+        ds = ds.map(lambda x, y: (aug_fn(x), y), num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Shuffle → batch → prefetch (always batch, even without augmentation)
     ds = (
-        ds.shuffle(512)            # Large shuffle buffer = better randomization
-          .batch(batch_size)        # Efficient batching
+        ds.shuffle(512)
+          .batch(batch_size, drop_remainder=True)
           .prefetch(tf.data.AUTOTUNE)
     )
 

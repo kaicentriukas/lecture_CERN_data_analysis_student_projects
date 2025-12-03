@@ -5,14 +5,35 @@ import tensorflow as tf
 import pickle
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.mixed_precision import set_global_policy
-
-set_global_policy("float32")
-print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
+import os
+import random
+import numpy as np
 
 # -------------------------------
-# Load dataset
+# Mixed precision / GPU check
+# -------------------------------
+set_global_policy("float32")  # TF 2.10 mixed precision safe with float32
+
+# -------------------------------
+# Deterministic seeds
+# -------------------------------
+# Seed from shared config
+SEED = 42
+os.environ["PYTHONHASHSEED"] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+gpus = tf.config.list_physical_devices('GPU')
+print("Num GPUs Available: ", len(gpus))
+if len(gpus) == 0:
+    print("WARNING: No GPU detected. Training will run on CPU.")
+
+# -------------------------------
+# Load dataset (limit for speed)
 # -------------------------------
 (train_images, train_latex), (val_images, val_latex) = load_mathwriting(limit=5000)
+
+# If no val split, create one
 if len(val_images) == 0:
     from sklearn.model_selection import train_test_split
     train_images, val_images, train_latex, val_latex = train_test_split(
@@ -23,12 +44,13 @@ if len(val_images) == 0:
 # Tokenizer
 # -------------------------------
 tokenizer = create_char_tokenizer(train_latex)
-train_sequences = texts_to_sequences(tokenizer, train_latex, max_len=100)
-val_sequences = texts_to_sequences(tokenizer, val_latex, max_len=100)
-vocab_size = len(tokenizer.word_index) + 1
+MAX_SEQ_LEN = 100
+train_sequences = texts_to_sequences(tokenizer, train_latex, max_len=MAX_SEQ_LEN)
+val_sequences = texts_to_sequences(tokenizer, val_latex, max_len=MAX_SEQ_LEN)
+vocab_size = len(tokenizer.word_index) + 1  # include padding index
 
 # -------------------------------
-# Preprocess images ONCE
+# Preprocess images ONCE (CPU)
 # -------------------------------
 processed_train_images = [preprocess_image(img) for img in train_images]
 processed_val_images = [preprocess_image(img) for img in val_images]
@@ -36,18 +58,18 @@ processed_val_images = [preprocess_image(img) for img in val_images]
 # -------------------------------
 # Create ultra-fast TF datasets
 # -------------------------------
-batch_size = 128  # GPU can handle larger batches
-train_dataset = create_tf_dataset(processed_train_images, train_sequences, batch_size=batch_size)
-val_dataset   = create_tf_dataset(processed_val_images, val_sequences, batch_size=batch_size)
+BATCH_SIZE = 128
+train_dataset = create_tf_dataset(processed_train_images, train_sequences, batch_size=BATCH_SIZE)
+val_dataset   = create_tf_dataset(processed_val_images, val_sequences, batch_size=BATCH_SIZE)
 
 # -------------------------------
 # Build model
 # -------------------------------
-model = build_model(vocab_size, output_seq_len=99)  # 100 tokens minus 1 for decoder shift
+model = build_model(vocab_size, output_seq_len=MAX_SEQ_LEN-1)  # shift for decoder
 model.summary()
 
 # -------------------------------
-# Training callbacks
+# Callbacks
 # -------------------------------
 checkpoint_cb = ModelCheckpoint("best_model.h5", monitor="val_loss", save_best_only=True, verbose=1)
 reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=2, min_lr=1e-6, verbose=1)
@@ -56,15 +78,10 @@ early_stop = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=
 # -------------------------------
 # Train
 # -------------------------------
-steps = len(processed_train_images) // batch_size
-validation_steps = len(processed_val_images) // batch_size
-
 history = model.fit(
     train_dataset,
     epochs=10,
-    steps_per_epoch=steps,
     validation_data=val_dataset,
-    validation_steps=validation_steps,
     callbacks=[checkpoint_cb, reduce_lr, early_stop],
     verbose=1
 )
@@ -72,6 +89,8 @@ history = model.fit(
 # -------------------------------
 # Save model & tokenizer
 # -------------------------------
-model.save("model_final.h5")
+model.save("model_gpu.h5")
 with open("tokenizer.pkl", "wb") as f:
     pickle.dump(tokenizer, f)
+
+print("Training finished successfully!")
