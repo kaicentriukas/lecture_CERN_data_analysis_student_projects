@@ -13,23 +13,23 @@ def build_model(vocab_size, output_seq_len=MAX_SEQ_LEN, learning_rate=0.001):
     # -------------------------------
     img_input = Input(shape=(64, 128, 1))  # Match ultra-fast dataset
 
-    x = layers.Conv2D(32, 3, padding='same', activation='relu')(img_input)
+    x = layers.Conv2D(48, 3, padding='same', activation='relu')(img_input)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
 
-    x = layers.Conv2D(64, 3, padding='same', activation='relu')(x)
+    x = layers.Conv2D(96, 3, padding='same', activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
 
-    x = layers.Conv2D(128, 3, padding='same', activation='relu')(x)
+    x = layers.Conv2D(160, 3, padding='same', activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
 
     x = layers.Flatten()(x)
-    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dense(320, activation='relu')(x)
         # Map to initial LSTM states
     init_h = layers.Dense(128, activation='relu')(x)
     init_c = layers.Dense(128, activation='relu')(x)
@@ -48,14 +48,18 @@ def build_model(vocab_size, output_seq_len=MAX_SEQ_LEN, learning_rate=0.001):
     emb = emb + positional_encoding[:tf.shape(emb)[1]]
     emb = layers.LayerNormalization()(emb)
 
-    lstm_out = layers.LSTM(
-        128,
-        return_sequences=True,
-        dropout=0.1,
-        recurrent_dropout=0.0
-    )(emb, initial_state=[init_h, init_c])
+    lstm_out = layers.Bidirectional(
+        layers.LSTM(
+            128,
+            return_sequences=True,
+            dropout=0.1,
+            recurrent_dropout=0.0
+        )
+    )(emb, initial_state=[init_c, init_h] * 2)  # bidirectional needs h and c for both directions
 
-    logits = layers.Dense(vocab_size, activation='softmax')(lstm_out)
+    proj = layers.Dense(128, activation='relu')(lstm_out)
+    logits = layers.Dense(vocab_size, activation='softmax')(proj)
+
 
     model = models.Model([img_input, dec_input], logits)
 
@@ -63,7 +67,7 @@ def build_model(vocab_size, output_seq_len=MAX_SEQ_LEN, learning_rate=0.001):
 
     model.compile(
         optimizer=optimizer,
-        loss='sparse_categorical_crossentropy',
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=['accuracy']
     )
 
