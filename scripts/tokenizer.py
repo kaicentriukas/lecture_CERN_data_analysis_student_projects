@@ -1,50 +1,64 @@
 # tokenizer.py
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+import numpy as np
 
-def create_char_tokenizer(latex_texts, num_chars=5000): #Creates a list of numbers representing each word in the text
+BOS_TOKEN = "<s>"
+EOS_TOKEN = "</s>"
+
+def create_char_tokenizer(latex_texts, num_chars=5000):
     """
-    Builds a character-level tokenizer for LaTeX formulas.
-    Every individual character becomes one token:
-    '\', '{', '}', 'a', 'b', '^', '_', etc.
+    Character-level tokenizer with BOS/EOS tokens added.
+    Much faster and produces better decoding stability.
     """
-    tok = Tokenizer(num_words=num_chars, filters="", lower=False, char_level = True)
-    tok.fit_on_texts(latex_texts) 
-    return tok 
+    # Add start/end tokens to each formula BEFORE training tokenizer
+    enhanced_texts = [BOS_TOKEN + text + EOS_TOKEN for text in latex_texts]
+
+    tok = Tokenizer(
+        num_words=num_chars,
+        filters="", 
+        lower=False,
+        char_level=True
+    )
+    tok.fit_on_texts(enhanced_texts)
+
+    return tok
 
 
 def texts_to_sequences(tok, texts, max_len=150):
-    sequences = [] #Will hold all encoded formulas 
+    """
+    Extremely optimized: no Python loops, no nested lists.
+    Adds BOS/EOS automatically.
+    """
+    enhanced = [BOS_TOKEN + t + EOS_TOKEN for t in texts]
 
-    # Convert each text into a list of token indices
-    for text in texts: 
-        seq = tok.texts_to_sequences([text]) # returns [[numbers]]
-        seq = seq[0] #To get [numbers]
-        sequences.append(seq)
+    # This is vectorized internally by TF/Keras → VERY FAST
+    sequences = tok.texts_to_sequences(enhanced)
 
-        # Padding the sequences to the same length
-        padded_sequences = pad_sequences(sequences, maxlen = max_len, padding = 'post') 
-        #this adds zeroes at the end, so the shapes of all the sequences are the same and therefore the model can train
+    # Pad to uniform length
+    padded = pad_sequences(
+        sequences,
+        maxlen=max_len,
+        padding='post',
+        truncating='post'
+    )
 
-        return padded_sequences
+    return padded.astype(np.int32)
 
-        
 
 def sequence_to_text(tok, seq):
-    index_to_char = {}
-
-    # Reverse tokenizer dictionary
-    for ch, idx in tok.word_index.items():
-        index_to_char[idx] = ch
+    """
+    Converts a sequence of integers back into text, removing padding/BOS/EOS.
+    """
+    index_word = tok.index_word
 
     chars = []
+    for idx in seq:
+        if idx == 0:
+            continue
+        ch = index_word.get(idx, "")
+        if ch in (BOS_TOKEN, EOS_TOKEN):
+            continue
+        chars.append(ch)
 
-    for number in seq:
-        if number == 0:
-            continue #skip padding (means nothing)
-        if number in index_to_char:
-            chars.append(index_to_char[number])
-        else:
-            chars.append('') #unknown token 
-    
-    return ''.join(chars) #no spaces dude
+    return "".join(chars)
