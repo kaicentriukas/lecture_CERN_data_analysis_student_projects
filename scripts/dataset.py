@@ -1,11 +1,12 @@
 # dataset.py (ULTRA FAST VERSION)
 import numpy as np
 import tensorflow as tf
+import tensorflow_addons as tfa
 from PIL import Image
 from datasets import load_dataset
 
 # Reduce image size for speed
-IMG_SIZE = (48, 96)   # (height, width) → 4× faster CNN
+IMG_SIZE = (64, 128)   # (height, width) → 4× faster CNN
 
 
 # ---------------------------------------------------------
@@ -94,24 +95,13 @@ def create_tf_dataset(images, sequences, batch_size=32, augment=False):
         ((images, decoder_in), decoder_out)
     )
 
-    # Optional light augmentation for training pipeline
-    if augment:
-        def aug_fn(x):
-            img, dec_in = x
-            img = tf.image.random_brightness(img, max_delta=0.05)
-            img = tf.image.random_contrast(img, lower=0.95, upper=1.05)
-            img = tf.image.random_flip_left_right(img)
-            noise = tf.random.normal(tf.shape(img), mean=0.0, stddev=0.01, dtype=img.dtype)
-            img = tf.clip_by_value(img + noise, 0.0, 1.0)
-            return (img, dec_in)
-
-        ds = ds.map(lambda x, y: (aug_fn(x), y), num_parallel_calls=tf.data.AUTOTUNE)
 
     # Shuffle → batch → prefetch (always batch, even without augmentation)
     ds = (
-        ds.shuffle(512)
-          .batch(batch_size, drop_remainder=True)
-          .prefetch(tf.data.AUTOTUNE)
+        ds.cache()
+            .shuffle(512)
+            .batch(batch_size, drop_remainder=True)
+            .prefetch(tf.data.AUTOTUNE)
     )
 
     return ds

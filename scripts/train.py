@@ -5,6 +5,7 @@ import tensorflow as tf
 import pickle
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.mixed_precision import set_global_policy
+from config import MAX_SEQ_LEN, BATCH_SIZE, DATA_LIMIT, SEED
 import os
 import random
 import numpy as np
@@ -18,7 +19,6 @@ set_global_policy("float32")  # TF 2.10 mixed precision safe with float32
 # Deterministic seeds
 # -------------------------------
 # Seed from shared config
-SEED = 42
 os.environ["PYTHONHASHSEED"] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
@@ -31,20 +31,19 @@ if len(gpus) == 0:
 # -------------------------------
 # Load dataset (limit for speed)
 # -------------------------------
-(train_images, train_latex), (val_images, val_latex) = load_mathwriting(limit=5000)
+(train_images, train_latex), (val_images, val_latex) = load_mathwriting(limit=DATA_LIMIT)
 
 # If no val split, create one
 if len(val_images) == 0:
     from sklearn.model_selection import train_test_split
     train_images, val_images, train_latex, val_latex = train_test_split(
-        train_images, train_latex, test_size=0.1, random_state=42
+        train_images, train_latex, test_size=0.1, random_state=SEED
     )
 
 # -------------------------------
 # Tokenizer
 # -------------------------------
 tokenizer = create_char_tokenizer(train_latex)
-MAX_SEQ_LEN = 100
 train_sequences = texts_to_sequences(tokenizer, train_latex, max_len=MAX_SEQ_LEN)
 val_sequences = texts_to_sequences(tokenizer, val_latex, max_len=MAX_SEQ_LEN)
 vocab_size = len(tokenizer.word_index) + 1  # include padding index
@@ -58,7 +57,7 @@ processed_val_images = [preprocess_image(img) for img in val_images]
 # -------------------------------
 # Create ultra-fast TF datasets
 # -------------------------------
-BATCH_SIZE = 128
+# Batch size from shared config
 train_dataset = create_tf_dataset(processed_train_images, train_sequences, batch_size=BATCH_SIZE)
 val_dataset   = create_tf_dataset(processed_val_images, val_sequences, batch_size=BATCH_SIZE)
 
