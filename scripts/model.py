@@ -45,7 +45,7 @@ def build_model(vocab_size, output_seq_len=100, learning_rate=0.001):
 
     model = models.Model([img_input, dec_input], logits)
 
-    optimizer = AdamW(learning_rate=learning_rate, weight_decay=0.0001)
+    optimizer = Adam(learning_rate=learning_rate)
 
     model.compile(
         optimizer=optimizer,
