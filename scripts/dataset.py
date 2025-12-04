@@ -47,15 +47,25 @@ def load_mathwriting(limit=None):
 # ---------------------------------------------------------
 def preprocess_image(img):
     """
-    Convert PIL or NumPy image to a normalized 48x96 grayscale float tensor.
+    Convert path/PIL/NumPy image to normalized grayscale float tensor of size IMG_SIZE.
+    Accepts:
+    - str: filesystem path to an image
+    - PIL.Image.Image
+    - np.ndarray (uint8 or float)
     """
 
-    # Convert to numpy
+    # Load if a file path string is provided
+    if isinstance(img, str):
+        img = Image.open(img)
+
+    # Convert ndarray to PIL
     if isinstance(img, np.ndarray):
         if img.dtype != np.uint8:
             img = (img * 255).astype(np.uint8)
         img = Image.fromarray(img)
-    elif not isinstance(img, Image.Image):
+
+    # Validate type
+    if not isinstance(img, Image.Image):
         raise ValueError(f"Unknown image type: {type(img)}")
 
     # Convert to grayscale
