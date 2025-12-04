@@ -1,74 +1,48 @@
+# model_fixed.py
 from tensorflow.keras import layers, models, Input
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from config import MAX_SEQ_LEN
 
-def build_model(vocab_size, output_seq_len=MAX_SEQ_LEN, learning_rate=0.001):
-    """
-    Lightweight encoder-decoder model for MathWriting.
-    Optimized for speed on GPU.
-    """
-    # -------------------------------
-    # ENCODER: Lightweight CNN
-    # -------------------------------
-    img_input = Input(shape=(64, 128, 1))  # Match ultra-fast dataset
 
+def build_model(vocab_size, output_seq_len=MAX_SEQ_LEN, learning_rate=0.001):
+    img_input = Input(shape=(64, 128, 1), name="encoder_input")
     x = layers.Conv2D(48, 3, padding='same', activation='relu')(img_input)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
-
     x = layers.Conv2D(96, 3, padding='same', activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
-
     x = layers.Conv2D(160, 3, padding='same', activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPooling2D(2)(x)
     x = layers.Dropout(0.1)(x)
-
     x = layers.Flatten()(x)
-    x = layers.Dense(320, activation='relu')(x)
-        # Map to initial LSTM states
-    init_h = layers.Dense(128, activation='relu')(x)
-    init_c = layers.Dense(128, activation='relu')(x)
+    x = layers.Dense(320, activation='relu', name="encoder_fc")(x)
 
-    # -------------------------------
-    # DECODER: CuDNN LSTM (fast on GPU)
-    # -------------------------------
-    pos_emb = layers.Embedding(output_seq_len, 96)
-    positions = tf.range(start=0, limit=output_seq_len, delta=1)
-    positional_encoding = pos_emb(positions)
+    init_h = layers.Dense(128, activation='relu', name="init_h")(x)
+    init_c = layers.Dense(128, activation='relu', name="init_c")(x)
 
-    dec_input = Input(shape=(None,), dtype='int32')
-
-    emb = layers.Embedding(vocab_size, 96, mask_zero=True)(dec_input)
+    dec_input = Input(shape=(None,), dtype='int32', name="decoder_input")
+    emb = layers.Embedding(vocab_size, 96, mask_zero=True, name="decoder_embedding")(dec_input)
     emb = layers.Dropout(0.1)(emb)
-    emb = emb + positional_encoding[:tf.shape(emb)[1]]
-    emb = layers.LayerNormalization()(emb)
+    emb = layers.LayerNormalization(name="decoder_ln")(emb)
 
-    lstm_out = layers.Bidirectional(
-        layers.LSTM(
-            128,
-            return_sequences=True,
-            dropout=0.1,
-            recurrent_dropout=0.0
-        )
-    )(emb, initial_state=[init_c, init_h] * 2)  # bidirectional needs h and c for both directions
+    lstm1 = layers.LSTM(128, return_sequences=True, return_state=True, name="decoder_lstm1")
+    lstm2 = layers.LSTM(128, return_sequences=True, return_state=True, name="decoder_lstm2")
 
-    proj = layers.Dense(128, activation='relu')(lstm_out)
-    logits = layers.Dense(vocab_size, activation='softmax')(proj)
+    lstm_out1 = lstm1(emb, initial_state=[init_h, init_c])
+    lstm_out2 = lstm2(lstm_out1[0])  # only sequence output goes in
 
+    proj = layers.Dense(128, activation='relu', name="proj")(lstm_out2[0])
+    logits = layers.Dense(vocab_size, activation=None, name="decoder_logits")(proj)
 
-    model = models.Model([img_input, dec_input], logits)
-
-    optimizer = Adam(learning_rate=learning_rate)
-
+    model = models.Model([img_input, dec_input], logits, name="MathWriter_v2")
     model.compile(
-        optimizer=optimizer,
+        optimizer=Adam(learning_rate=learning_rate),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=['accuracy']
     )
-
     return model

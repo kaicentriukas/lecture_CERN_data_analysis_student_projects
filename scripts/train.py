@@ -10,6 +10,7 @@ import os
 import random
 import numpy as np
 
+
 # -------------------------------
 # Mixed precision / GPU check
 # -------------------------------
@@ -79,7 +80,7 @@ early_stop = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=
 # -------------------------------
 history = model.fit(
     train_dataset,
-    epochs=10,
+    epochs=20,
     validation_data=val_dataset,
     callbacks=[checkpoint_cb, reduce_lr, early_stop],
     verbose=1

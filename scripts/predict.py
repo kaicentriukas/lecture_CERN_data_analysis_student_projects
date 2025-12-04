@@ -1,76 +1,88 @@
-# predict_fullseq.py
+# predict_debug.py
 from tensorflow.keras.models import load_model
 import numpy as np
-from PIL import Image
 import pickle
-import os
-from dataset import preprocess_image
-from tokenizer import sequence_to_text
-from config import MAX_SEQ_LEN
+from tokenizer import sequence_to_text, BOS_TOKEN, EOS_TOKEN
+from inference_model import build_inference_models
+from dataset import preprocess_image  # your image preprocessing
 
-MODEL_PATH = "model_gpu.h5"
-TOKENIZER_PATH = "tokenizer.pkl"
-IMAGE_PATH = "../dataset/hand_data/prediction_test_1.jpg"
+# -----------------------------
+# Load trained model
+# -----------------------------
+print("[INFO] Loading model...")
+training_model = load_model("model_gpu.h5", compile=False)
 
-# -------------------
-# Helpers
-# -------------------
-def prepare_image_for_model(image_path, target_size=(64, 128)):
-    # Open file, preprocess using your preprocess_image which expects PIL.Image or np.array
-    img = Image.open(image_path).convert("L")
-    # make sure preprocess_image uses same IMG_SIZE as training; if not, change target_size
-    img = img.resize((target_size[1], target_size[0]))
-    # Convert to numpy float32 0..1 and add channel
-    arr = np.array(img, dtype=np.float32) / 255.0
-    arr = np.expand_dims(arr, axis=-1)
-    return arr
+# -----------------------------
+# Build inference encoder/decoder
+# -----------------------------
+print("[INFO] Building inference models...")
+encoder_model, decoder_model = build_inference_models(training_model)
 
-# -------------------
-# Main
-# -------------------
-if __name__ == "__main__":
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"{MODEL_PATH} not found.")
-    if not os.path.exists(TOKENIZER_PATH):
-        raise FileNotFoundError(f"{TOKENIZER_PATH} not found.")
-    if not os.path.exists(IMAGE_PATH):
-        raise FileNotFoundError(f"{IMAGE_PATH} not found.")
+# -----------------------------
+# Load tokenizer
+# -----------------------------
+print("[INFO] Loading tokenizer...")
+with open("tokenizer.pkl", "rb") as f:
+    tokenizer = pickle.load(f)
 
-    # load tokenizer
-    with open(TOKENIZER_PATH, "rb") as f:
-        tokenizer = pickle.load(f)
+# Safe retrieval of BOS/EOS ids
+start_id = tokenizer.word_index.get(BOS_TOKEN)
+if start_id is None:
+    print(f"[WARN] BOS token {BOS_TOKEN} not found in tokenizer. Using 1 as default.")
+    start_id = 1
 
-    model = load_model(MODEL_PATH, compile=False)  # compile=False is fine for inference
+end_id = tokenizer.word_index.get(EOS_TOKEN)
+if end_id is None:
+    print(f"[WARN] EOS token {EOS_TOKEN} not found in tokenizer. Using 2 as default.")
+    end_id = 2
 
-    img = prepare_image_for_model(IMAGE_PATH, target_size=(64, 128))
-    img_batch = np.expand_dims(img, axis=0)  # (1, H, W, 1)
+# -----------------------------
+# Load & preprocess image
+# -----------------------------
+img_path = "../dataset/hand_data/prediction_test_2.jpg"
+print(f"[INFO] Preprocessing image: {img_path}")
+img = preprocess_image(img_path)
 
-    # Build a dummy decoder input of the same length used at training:
-    # If your training used MAX_SEQ_LEN and sequences shaped (max_len,) then:
-    decoder_len = MAX_SEQ_LEN - 1
-    decoder_in = np.zeros((1, decoder_len), dtype=np.int32)
+print(f"[DEBUG] Preprocessed image shape (before batch): {img.shape}, min={img.min()}, max={img.max()}")
+img = np.expand_dims(img, axis=0)
+print(f"[DEBUG] Image shape after adding batch dimension: {img.shape}")
 
-    # If tokenizer has <START>, insert it; else keep zeros (pad)
-    start_id = tokenizer.word_index.get('<START>', 0)
-    decoder_in[0, 0] = start_id
+# -----------------------------
+# Encoder forward pass
+# -----------------------------
+print("[INFO] Running encoder forward pass...")
+h1, c1 = encoder_model.predict(img)
+h2 = np.zeros_like(h1)
+c2 = np.zeros_like(c1)
+print(f"[DEBUG] Encoder states shapes: h1={h1.shape}, c1={c1.shape}, h2={h2.shape}, c2={c2.shape}")
 
-    # Predict full sequence at once (model was trained with teacher forcing)
-    preds = model.predict([img_batch, decoder_in], verbose=0)  # shape (1, decoder_len, vocab_size)
+# -----------------------------
+# Step-by-step greedy decoding
+# -----------------------------
+max_len = 150
+decoded_ids = [start_id]
 
-    # Greedy argmax across time steps:
-    token_ids = list(np.argmax(preds[0], axis=-1))  # list length = decoder_len
+print("[INFO] Starting greedy decoding loop...")
+for i in range(max_len):
+    token_input = np.array([[decoded_ids[-1]]])
+    logits, h1, c1, h2, c2 = decoder_model.predict([token_input, h1, c1, h2, c2])
+    next_id = int(np.argmax(logits[0, 0]))
+    decoded_ids.append(next_id)
+    
+    # Debug info
+    print(f"[STEP {i+1}] last token ID: {decoded_ids[-2]}, next ID: {next_id}")
+    
+    if next_id == end_id:
+        print(f"[INFO] EOS token reached at step {i+1}")
+        break
 
-    # Trim at <END> if present
-    end_id = tokenizer.word_index.get('<END>')
-    if end_id is not None:
-        if end_id in token_ids:
-            token_ids = token_ids[:token_ids.index(end_id)]
+# -----------------------------
+# Convert token IDs to LaTeX
+# -----------------------------
+decoded_ids_no_bos = decoded_ids[1:]
+latex_text = sequence_to_text(tokenizer, decoded_ids_no_bos)
+print("[DEBUG] Raw decoded text (with possible extra BOS/EOS):", latex_text)
 
-    # Convert to text; fall back to manual mapping if needed
-    latex = sequence_to_text(tokenizer, token_ids).strip()
-    if not latex:
-        index_word = {v: k for k, v in tokenizer.word_index.items()}
-        latex = ''.join(index_word.get(t, '') for t in token_ids if t != 0).strip()
-
-    print("Predicted token ids (first 50):", token_ids[:50])
-    print("\nFinal LaTeX prediction:", latex)
+# Clean up any residual BOS/EOS tokens
+latex_text_clean = latex_text.replace(BOS_TOKEN, "").replace(EOS_TOKEN, "")
+print("[INFO] Predicted LaTeX:", latex_text_clean)

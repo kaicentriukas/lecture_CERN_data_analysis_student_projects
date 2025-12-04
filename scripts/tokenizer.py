@@ -11,6 +11,7 @@ def create_char_tokenizer(latex_texts, num_chars=5000):
     Character-level tokenizer with BOS/EOS tokens added.
     Much faster and produces better decoding stability.
     """
+    
     # Add start/end tokens to each formula BEFORE training tokenizer
     enhanced_texts = [BOS_TOKEN + text + EOS_TOKEN for text in latex_texts]
 
@@ -22,7 +23,16 @@ def create_char_tokenizer(latex_texts, num_chars=5000):
     )
     tok.fit_on_texts(enhanced_texts)
 
+    # Ensure BOS/EOS tokens exist in tokenizer
+    if BOS_TOKEN not in tok.word_index:
+        tok.word_index[BOS_TOKEN] = len(tok.word_index) + 1
+        tok.index_word[tok.word_index[BOS_TOKEN]] = BOS_TOKEN
+    if EOS_TOKEN not in tok.word_index:
+        tok.word_index[EOS_TOKEN] = len(tok.word_index) + 1
+        tok.index_word[tok.word_index[EOS_TOKEN]] = EOS_TOKEN
+
     return tok
+
 
 
 def texts_to_sequences(tok, texts, max_len=150):
@@ -54,7 +64,7 @@ def sequence_to_text(tok, seq):
 
     chars = []
     for idx in seq:
-        if idx == 0:
+        if idx == 0:  # padding
             continue
         ch = index_word.get(idx, "")
         if ch in (BOS_TOKEN, EOS_TOKEN):
