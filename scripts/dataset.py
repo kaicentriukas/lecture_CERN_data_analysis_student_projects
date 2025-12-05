@@ -5,8 +5,8 @@ import tensorflow_addons as tfa
 from PIL import Image
 from datasets import load_dataset
 
-# Image size (height, width). Increased moderately to capture more detail
-# while fitting in ~2GB VRAM on GTX 1650.
+# Image size (height, width). Increased to capture more detail.
+# Note: Keep within GPU memory limits (~2GB). Adjust if OOM.
 IMG_SIZE = (80, 160)
 
 
@@ -109,9 +109,10 @@ def create_tf_dataset(images, sequences, batch_size=32, augment=False):
 
     # Shuffle → batch → prefetch (always batch, even without augmentation)
     ds = (
-        ds.shuffle(512)
-          .batch(batch_size, drop_remainder=True)
-          .prefetch(tf.data.AUTOTUNE)
+        ds.cache()
+            .shuffle(512)
+            .batch(batch_size, drop_remainder=True)
+            .prefetch(tf.data.AUTOTUNE)
     )
 
     return ds

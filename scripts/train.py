@@ -107,7 +107,7 @@ model.summary()
 # Callbacks
 # -------------------------------
 checkpoint_cb = ModelCheckpoint("best_model.h5", monitor="val_loss", save_best_only=True, verbose=1)
-reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=2, min_lr=1e-6, verbose=1)
+reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=2, min_lr=1e-5, verbose=1)
 early_stop = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True, verbose=1)
 
 # -------------------------------
@@ -174,6 +174,7 @@ parser.add_argument('--scheduled-sampling', action='store_true', help='Enable sc
 parser.add_argument('--ss-prob', type=float, default=0.3, help='Scheduled sampling probability')
 parser.add_argument('--batch-size', type=int, default=None, help='Override batch size (default from config)')
 parser.add_argument('--data-limit', type=int, default=None, help='Override dataset size limit (default from config)')
+parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
 args = parser.parse_args()
 
 # If CLI overrides are provided, rebuild datasets accordingly
@@ -211,7 +212,7 @@ if args.scheduled_sampling:
 
 history = model.fit(
     train_dataset,
-    epochs=10,
+    epochs=args.epochs,
     validation_data=val_dataset,
     callbacks=[checkpoint_cb, reduce_lr, early_stop, preview_cb],
     verbose=1
