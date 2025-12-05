@@ -5,8 +5,9 @@ import tensorflow_addons as tfa
 from PIL import Image
 from datasets import load_dataset
 
-# Reduce image size for speed
-IMG_SIZE = (64, 128)   # (height, width) → 4× faster CNN
+# Image size (height, width). Increased moderately to capture more detail
+# while fitting in ~2GB VRAM on GTX 1650.
+IMG_SIZE = (80, 160)
 
 
 # ---------------------------------------------------------
@@ -108,10 +109,9 @@ def create_tf_dataset(images, sequences, batch_size=32, augment=False):
 
     # Shuffle → batch → prefetch (always batch, even without augmentation)
     ds = (
-        ds.cache()
-            .shuffle(512)
-            .batch(batch_size, drop_remainder=True)
-            .prefetch(tf.data.AUTOTUNE)
+        ds.shuffle(512)
+          .batch(batch_size, drop_remainder=True)
+          .prefetch(tf.data.AUTOTUNE)
     )
 
     return ds
