@@ -72,30 +72,27 @@ train_dataset = create_tf_dataset(processed_train_images, train_sequences, batch
 val_dataset   = create_tf_dataset(processed_val_images, val_sequences, batch_size=BATCH_SIZE)
 
 # -------------------------------
-# Debug: Inspect one batch
+# Debug: Inspect one batch (after CLI overrides applied)
 # -------------------------------
-print("[DEBUG] Inspecting one training batch...")
-for ((dbg_imgs, dbg_dec_in), dbg_dec_out) in train_dataset.take(1):
-    print("[DEBUG] imgs:", dbg_imgs.shape, dbg_imgs.dtype, "min/max:", tf.reduce_min(dbg_imgs).numpy(), tf.reduce_max(dbg_imgs).numpy())
-    print("[DEBUG] dec_in:", dbg_dec_in.shape, dbg_dec_in.dtype)
-    print("[DEBUG] dec_out:", dbg_dec_out.shape, dbg_dec_out.dtype)
-    # Check BOS/EOS alignment
-    from tokenizer import BOS_TOKEN, EOS_TOKEN
-    bos_id = tokenizer.word_index.get(BOS_TOKEN, -1)
-    eos_id = tokenizer.word_index.get(EOS_TOKEN, -1)
-    print("[DEBUG] BOS id:", bos_id, "EOS id:", eos_id)
-    # Count BOS at t=0 in dec_in
-    bos_at_t0 = tf.reduce_sum(tf.cast(tf.equal(dbg_dec_in[:,0], bos_id), tf.int32)).numpy()
-    print("[DEBUG] BOS at t=0 in dec_in:", bos_at_t0, "/", dbg_dec_in.shape[0].numpy() if hasattr(dbg_dec_in.shape[0], 'numpy') else int(dbg_dec_in.shape[0]))
-    # Check EOS somewhere in dec_out
-    eos_present = tf.reduce_sum(tf.cast(tf.reduce_any(tf.equal(dbg_dec_out, eos_id), axis=1), tf.int32)).numpy()
-    print("[DEBUG] EOS present in dec_out (any position):", eos_present)
-    # Unique values snapshot
-    unique_in = tf.unique(tf.reshape(dbg_dec_in, [-1]))[0]
-    unique_out = tf.unique(tf.reshape(dbg_dec_out, [-1]))[0]
-    print("[DEBUG] unique dec_in sample:", unique_in[:20].numpy())
-    print("[DEBUG] unique dec_out sample:", unique_out[:20].numpy())
-    break
+def _inspect_one_batch(ds, tokenizer):
+    print("[DEBUG] Inspecting one training batch...")
+    for ((dbg_imgs, dbg_dec_in), dbg_dec_out) in ds.take(1):
+        print("[DEBUG] imgs:", dbg_imgs.shape, dbg_imgs.dtype, "min/max:", tf.reduce_min(dbg_imgs).numpy(), tf.reduce_max(dbg_imgs).numpy())
+        print("[DEBUG] dec_in:", dbg_dec_in.shape, dbg_dec_in.dtype)
+        print("[DEBUG] dec_out:", dbg_dec_out.shape, dbg_dec_out.dtype)
+        from tokenizer import BOS_TOKEN, EOS_TOKEN
+        bos_id = tokenizer.word_index.get(BOS_TOKEN, -1)
+        eos_id = tokenizer.word_index.get(EOS_TOKEN, -1)
+        print("[DEBUG] BOS id:", bos_id, "EOS id:", eos_id)
+        bos_at_t0 = tf.reduce_sum(tf.cast(tf.equal(dbg_dec_in[:,0], bos_id), tf.int32)).numpy()
+        print("[DEBUG] BOS at t=0 in dec_in:", bos_at_t0, "/", int(dbg_dec_in.shape[0]))
+        eos_present = tf.reduce_sum(tf.cast(tf.reduce_any(tf.equal(dbg_dec_out, eos_id), axis=1), tf.int32)).numpy()
+        print("[DEBUG] EOS present in dec_out (any position):", eos_present)
+        unique_in = tf.unique(tf.reshape(dbg_dec_in, [-1]))[0]
+        unique_out = tf.unique(tf.reshape(dbg_dec_out, [-1]))[0]
+        print("[DEBUG] unique dec_in sample:", unique_in[:20].numpy())
+        print("[DEBUG] unique dec_out sample:", unique_out[:20].numpy())
+        break
 
 # -------------------------------
 # Build model
@@ -197,6 +194,9 @@ if args.data_limit is not None:
 if args.batch_size is not None:
     train_dataset = create_tf_dataset(processed_train_images, train_sequences, batch_size=args.batch_size)
     val_dataset   = create_tf_dataset(processed_val_images, val_sequences, batch_size=args.batch_size)
+
+# Inspect after final dataset construction
+_inspect_one_batch(train_dataset, tokenizer)
 
 preview_cb = PreviewDecodeCallback(
     val_images_np=processed_val_images,

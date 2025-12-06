@@ -100,23 +100,32 @@ def load_latest_model():
     print("[INFO] Loading model...")
     try:
         m = load_model("best_model.h5", compile=False)
-        print("[INFO] Loaded model: best_model.h5")
+        print("[INFO] Using model: best_model.h5")
         return m
     except Exception:
         m = load_model("model_gpu.h5", compile=False)
-        print("[INFO] Fallback loaded model: model_gpu.h5")
+        print("[INFO] Using model: model_gpu.h5")
         return m
 
 # -----------------------------
 # Build inference encoder/decoder
 # -----------------------------
-training_model = load_latest_model()
+parser = argparse.ArgumentParser()
+parser.add_argument('--image', type=str, default="../dataset/hand_data/prediction_test_4.jpg", help='Path to image file')
+parser.add_argument('--beam', type=int, default=1, help='Beam size (1=greedy)')
+parser.add_argument('--length-norm', type=float, default=0.7, help='Length normalization exponent')
+parser.add_argument('--model', type=str, default=None, help='Explicit model path to use (overrides best_model.h5/model_gpu.h5)')
+args = parser.parse_args()
+
+if args.model:
+    print(f"[INFO] Loading model override: {args.model}")
+    training_model = load_model(args.model, compile=False)
+    print(f"[INFO] Using model: {args.model}")
+else:
+    training_model = load_latest_model()
 print("[INFO] Building inference models...")
 encoder_model, decoder_model = build_inference_models(training_model)
 
-# -----------------------------
-# Load tokenizer
-# -----------------------------
 print("[INFO] Loading tokenizer...")
 with open("tokenizer.pkl", "rb") as f:
     tokenizer = pickle.load(f)
@@ -125,15 +134,6 @@ print("[INFO] Tokenizer loaded. vocab_size=", getattr(tokenizer, "num_words", No
 # Safe retrieval of BOS/EOS ids
 start_id = tokenizer.word_index.get(BOS_TOKEN, 1)
 end_id = tokenizer.word_index.get(EOS_TOKEN, 2)
-
-# -----------------------------
-# Load & preprocess image
-# -----------------------------
-parser = argparse.ArgumentParser()
-parser.add_argument('--image', type=str, default="../dataset/hand_data/prediction_test_2.jpg", help='Path to image file')
-parser.add_argument('--beam', type=int, default=1, help='Beam size (1=greedy)')
-parser.add_argument('--length-norm', type=float, default=0.7, help='Length normalization exponent')
-args = parser.parse_args()
 
 print(f"[INFO] Preprocessing image: {args.image}")
 img = preprocess_image(args.image)

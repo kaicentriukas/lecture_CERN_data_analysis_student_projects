@@ -5,9 +5,9 @@ import tensorflow_addons as tfa
 from PIL import Image
 from datasets import load_dataset
 
-# Image size (height, width). Increased to capture more detail.
-# Note: Keep within GPU memory limits (~2GB). Adjust if OOM.
-IMG_SIZE = (80, 160)
+# Image size (height, width). Slightly reduced to ease VRAM while
+# preserving symbol legibility.
+IMG_SIZE = (60, 120)
 
 
 # ---------------------------------------------------------
@@ -93,9 +93,11 @@ def create_tf_dataset(images, sequences, batch_size=32, augment=False):
     then slices without Python overhead. 10–20× faster.
     """
 
-    # Convert to TF tensors (MUCH faster than feeding Python lists)
-    images = tf.constant(np.array(images), dtype=tf.float32)       # (N, 48, 96, 1)
-    sequences = tf.constant(np.array(sequences), dtype=tf.int32)   # (N, max_len)
+    # Convert to TF tensors on CPU to avoid large GPU constant allocation
+    # This prevents the "Dst tensor is not initialized" error when copying a huge constant to GPU.
+    with tf.device('/CPU:0'):
+        images = tf.constant(np.array(images), dtype=tf.float32)
+        sequences = tf.constant(np.array(sequences), dtype=tf.int32)
 
     # Prepare decoder input/output (shifted by 1)
     decoder_in  = sequences[:, :-1]
@@ -108,11 +110,13 @@ def create_tf_dataset(images, sequences, batch_size=32, augment=False):
 
 
     # Shuffle → batch → prefetch (always batch, even without augmentation)
+    # Cache is removed to avoid partial-cache warnings when only taking
+    # a small preview batch and to reduce peak RAM for very large limits.
     ds = (
-        ds.cache()
-            .shuffle(512)
+        ds.shuffle(512)
             .batch(batch_size, drop_remainder=True)
             .prefetch(tf.data.AUTOTUNE)
     )
+
 
     return ds
