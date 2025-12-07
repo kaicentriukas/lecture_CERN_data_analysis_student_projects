@@ -73,6 +73,7 @@ def normalize_missing_values(df):
         r"^\s*$",     # empty / whitespace
         r"(?i)^na$",  
         r"(?i)^n/a$",
+        r"(?i)^nan$",
         r"(?i)^null$",
         r"(?i)^none$",
         r"^\?$",
@@ -98,11 +99,17 @@ def fix_decimal_commas(df: pd.DataFrame) -> pd.DataFrame:
             )
 
             # Convert to numeric where possible
-            df_clean[col] = pd.to_numeric(df_clean[col], errors="ignore")
+            try:
+                df_clean[col] = pd.to_numeric(df_clean[col])
+            except Exception:
+                #Leave column unchanged if conversion fails
+                df_clean[col] = df_clean[col]
+
 
     return df_clean
 
 def extract_numeric_and_unit(df: pd.DataFrame) -> pd.DataFrame:
+    import re
 
     df_clean = df.copy()
 
@@ -111,7 +118,12 @@ def extract_numeric_and_unit(df: pd.DataFrame) -> pd.DataFrame:
         r"^\s*([+-]?(?:\d+(?:[.,]\d*)?|\d*[.,]\d+))\s*([A-Za-zµ°%]+)\s*$"
     )
 
-    # 2) unit in the HEADER, e.g. "Current, A", "Voltage (V)", "Force [N]"
+    # 2) unit in the HEADER:
+    #    - "Current, A"
+    #    - "Voltage (V)"
+    #    - "Force [N]"
+    #    - "Voltage_V"
+    #    - "Current_A"
     header_pattern = re.compile(
         r"""
         ^\s*
@@ -141,7 +153,6 @@ def extract_numeric_and_unit(df: pd.DataFrame) -> pd.DataFrame:
             if not extracted.isna().all().all():
                 base_name = str(col).strip() or "col"
 
-                # Ensure unique names (for cases like two different "Current" columns)
                 num_col = f"{base_name}_value"
                 unit_col = f"{base_name}_unit"
                 suffix = 2
@@ -164,7 +175,7 @@ def extract_numeric_and_unit(df: pd.DataFrame) -> pd.DataFrame:
         m = header_pattern.match(str(col))
         if m:
             base_name = m.group(1).strip() or "col"
-            header_unit = (m.group(2) or m.group(3)).strip()
+            header_unit = (m.group(2) or m.group(3)).strip()  # <--- IMPORTANT
 
             num_col = f"{base_name}_value"
             unit_col = f"{base_name}_unit"
@@ -182,7 +193,6 @@ def extract_numeric_and_unit(df: pd.DataFrame) -> pd.DataFrame:
 
             new_columns_order.extend([num_col, unit_col])
         else:
-            # no units -> keep original column
             new_columns_order.append(col)
 
     df_clean = df_clean[new_columns_order]
@@ -351,13 +361,16 @@ def convert_units_to_SI(df: pd.DataFrame) -> pd.DataFrame:
             base = col[:-6]  # remove "_value"
             unit_col = base + "_unit"
             if unit_col in df_clean.columns:
+                # make sure numeric column is float BEFORE assigning converted values
+                df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce").astype("float64")
+
                 for idx, (val, unit) in df_clean[[col, unit_col]].iterrows():
                     new_val, new_unit = _convert_one(val, unit)
                     df_clean.at[idx, col] = new_val
                     df_clean.at[idx, unit_col] = new_unit
 
-                # make sure numeric column is numeric dtype
-                df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce")
+                # (optional) one more coerce if you really want to be safe:
+                # df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce")
 
     return df_clean
 
@@ -372,13 +385,26 @@ def remove_duplicate_rows(df):
 
     return df_clean
 
+def _ask_yes_no(prompt: str) -> bool:
+    """
+    Ask until user types Y/Yes or N/No.
+    Returns True for yes, False for no.
+    """
+    while True:
+        ans = input(prompt).strip().lower()
+        if ans in ("y", "yes"):
+            return True
+        if ans in ("n", "no"):
+            return False
+        print("Please type y or n.")
+
 def move_rows_or_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     1) Ask ONCE: move rows or columns
     2) Show layout
     3) Ask: which one to move and to where (two numbers)
     4) Do the move, show new layout
-    5) Ask: move another? yes/no
+    5) Ask: move another? yes/no (forced Y/N)
     6) Repeat 3–5 until user says no, then return df
     """
     df_clean = df.copy()
@@ -402,8 +428,10 @@ def move_rows_or_columns(df: pd.DataFrame) -> pd.DataFrame:
             _print_rows_preview(df_clean)
 
             try:
-                pair = input(f"\nWhich row do you want to move and to where? "
-                             f"(enter two numbers 1–{n_rows}, e.g. '2 5'): ")
+                pair = input(
+                    f"\nWhich row do you want to move and to where? "
+                    f"(enter two numbers 1–{n_rows}, e.g. '2 5'): "
+                )
                 src_str, dest_str = pair.split()
                 src = int(src_str)
                 dest = int(dest_str)
@@ -423,8 +451,7 @@ def move_rows_or_columns(df: pd.DataFrame) -> pd.DataFrame:
             print("\nNew row layout:")
             _print_rows_preview(df_clean)
 
-            more = input("\nDo you want to move another row? (yes/no): ").strip().lower()
-            if more not in ("yes", "y"):
+            if not _ask_yes_no("\nDo you want to move another row? (y/n): "):
                 break
 
     # ---- 3) MOVING COLUMNS ----
@@ -442,9 +469,12 @@ def move_rows_or_columns(df: pd.DataFrame) -> pd.DataFrame:
 
             print("\nCurrent table:")
             _print_rows_preview(df_clean)
+
             try:
-                pair = input(f"\nWhich column do you want to move and to where? "
-                             f"(enter two numbers 1–{n_cols}, e.g. '1 3'): ")
+                pair = input(
+                    f"\nWhich column do you want to move and to where? "
+                    f"(enter two numbers 1–{n_cols}, e.g. '1 3'): "
+                )
                 src_str, dest_str = pair.split()
                 src = int(src_str)
                 dest = int(dest_str)
@@ -461,28 +491,35 @@ def move_rows_or_columns(df: pd.DataFrame) -> pd.DataFrame:
             df_clean = df_clean[cols]
 
             print("\nNew column layout:")
-            print(df_clean)
+            _print_rows_preview(df_clean)
 
-            more = input("\nDo you want to move another column? (yes/no): ").strip().lower()
-            if more not in ("yes", "y"):
+            if not _ask_yes_no("\nDo you want to move another column? (y/n): "):
                 break
 
     return df_clean
 
-def _print_rows_preview(df):
-    n = len(df)
-    print(f"\nTotal rows: {n}")
+def _print_rows_preview(df: pd.DataFrame, max_rows: int = 20) -> None:
+    """
+    Print a preview of the dataframe.
+    - If small: print everything
+    - If large: print head and tail
+    - Index is shown starting from 1 (not 0)
+    """
+    if df is None or df.empty:
+        print("<empty table>")
+        return
 
-    if n <= 20:
-        print(df)
+    df_show = df.reset_index(drop=True).copy()
+    df_show.index = df_show.index + 1  # 1-based index
+
+    n = len(df_show)
+    if n <= max_rows:
+        print(df_show)
     else:
-        print("\n--- FIRST 10 ROWS ---")
-        print(df.head(10))
-
-        print("\n...")
-
-        print("\n--- LAST 10 ROWS ---")
-        print(df.tail(10))
+        half = max_rows // 2
+        print(df_show.head(half))
+        print("...")
+        print(df_show.tail(max_rows - half))
 
 def _choose_column(columns, prompt):
     print(prompt)
@@ -547,7 +584,7 @@ def _style_axes(ax, x_label, y_label, title):
         spine.set_visible(True)
 
     ax.tick_params(direction="in", top=True, right=True)
-    ax.grid(True)
+    # Grid is now controlled by user choice
 
 def plot_data(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
     """
@@ -657,8 +694,72 @@ def plot_data(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
         print("Unknown plot type.")
         plt.close(fig)
         return df
+    
+    # ----- axis scales: linear / log -----
+    print("\nAxis scale options:")
+    print("X-axis: [1] linear  [2] log")
+    x_choice = input("Choose X-axis scale [1]: ").strip()
+    if x_choice == "2":
+        ax.set_xscale("log")
+    else:
+        ax.set_xscale("linear")
+
+    print("Y-axis: [1] linear  [2] log")
+    y_choice = input("Choose Y-axis scale [1]: ").strip()
+    if y_choice == "2":
+        ax.set_yscale("log")
+    else:
+        ax.set_yscale("linear")
+
+        # ----- grid toggle -----
+    print("\nGrid options:")
+    print("[1] Grid ON")
+    print("[2] Grid OFF")
+    grid_choice = input("Enable grid? [1]: ").strip()
+
+    if grid_choice == "2":
+        ax.grid(False)
+    else:
+        ax.grid(True)
 
     plt.tight_layout()
+
+    print("\n----- Plot customization -----")
+
+    # X label
+    default_x_label = x_col
+    x_label = input(f"X-axis label [{default_x_label}]: ").strip()
+    if not x_label:
+        x_label = default_x_label
+    ax.set_xlabel(x_label)
+
+    # Y label (if multi-Y, default = comma-separated)
+    default_y_label = ", ".join(y_cols)
+    y_label = input(f"Y-axis label [{default_y_label}]: ").strip()
+    if not y_label:
+        y_label = default_y_label
+    ax.set_ylabel(y_label)
+
+    # Legend toggle
+    if len(y_cols) > 1:
+        add_legend = input("Add legend? (y/n) [y]: ").strip().lower()
+        if add_legend in ("", "y", "yes"):
+            ax.legend()
+    else:
+        add_legend = input("Add legend? (y/n) [n]: ").strip().lower()
+        if add_legend in ("y", "yes"):
+            ax.legend()
+
+    # Title toggle + custom title
+    enable_title = input("Add title? (y/n) [y]: ").strip().lower()
+    if enable_title in ("", "y", "yes"):
+        default_title = ax.get_title() or ""
+        custom_title = input(f"Title [{default_title}]: ").strip()
+        if not custom_title:
+            custom_title = default_title
+        ax.set_title(custom_title)
+    else:
+        ax.set_title("")  # clear title
 
     # ===== ASK USER WHERE TO SAVE PNG (relative to project folder) =====
     # project folder = one level above Scripts (where this file lives)
@@ -699,4 +800,139 @@ def plot_data(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
     print("\nPlot saved as:\n  ", png_path)
 
     plt.close(fig)
+    return df
+
+def _latex_escape(value) -> str:
+    if pd.isna(value):
+        return ""
+    s = str(value)
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    for old, new in replacements.items():
+        s = s.replace(old, new)
+    return s
+
+def generate_latex_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Let the user pick columns + (optionally) row range and save a standalone
+    LaTeX file (.tex) containing a full document with a single table.
+    Does NOT modify df.
+    """
+    import os
+
+    if df.empty:
+        print("DataFrame is empty, nothing to export.")
+        return df
+
+    all_cols = list(df.columns)
+
+    # choose columns
+    from_cols = _choose_multiple_columns(all_cols, "\nChoose column(s) for LaTeX table:")
+    if not from_cols:
+        return df
+
+    n_rows = len(df)
+    print(f"\nData has {n_rows} rows.")
+    use_all = input("Use ALL rows? (y/n) [y]: ").strip().lower()
+
+    if use_all in ("", "y", "yes"):
+        df_sub = df[from_cols]
+    else:
+        try:
+            start = int(input("Start row (1-based): ").strip())
+            end = int(input("End row (1-based, inclusive): ").strip())
+        except ValueError:
+            print("Invalid row numbers. Using all rows instead.")
+            df_sub = df[from_cols]
+        else:
+            start = max(1, start)
+            end = min(n_rows, end)
+            if start > end:
+                print("Start > end, using all rows instead.")
+                df_sub = df[from_cols]
+            else:
+                df_sub = df.iloc[start - 1:end][from_cols]
+
+    # caption / label / alignment
+    print("\n----- LaTeX table settings -----")
+    caption = input("Caption (optional): ").strip()
+    label = input("Label (without \\label{}), e.g. table:results (optional): ").strip()
+
+    align_choice = input("Column alignment (l/c/r) for ALL columns [c]: ").strip().lower()
+    if align_choice not in ("l", "r", "c"):
+        align_choice = "c"
+    col_spec = "|" + "|".join(align_choice for _ in from_cols) + "|"
+
+    # ---------- build LaTeX as a FULL document ----------
+    lines = []
+    lines.append(r"\documentclass{article}")
+    lines.append(r"\usepackage[utf8]{inputenc}")
+    lines.append(r"\usepackage{siunitx}")  # handy for physics, ok if unused
+    lines.append("")
+    lines.append(r"\begin{document}")
+    lines.append("")
+
+    lines.append(r"\begin{table}[htbp]")
+    lines.append(r"  \centering")
+    if caption:
+        lines.append(f"  \\caption{{{_latex_escape(caption)}}}")
+    if label:
+        lines.append(f"  \\label{{{label}}}")
+    lines.append(f"  \\begin{{tabular}}{{{col_spec}}}")
+    lines.append(r"    \hline")
+
+    # Header row
+    header = " & ".join(_latex_escape(c) for c in from_cols) + r" \\"
+    lines.append("    " + header)
+    lines.append(r"    \hline")
+
+    # Data rows
+    for _, row in df_sub.iterrows():
+        row_str = " & ".join(_latex_escape(v) for v in row[from_cols]) + r" \\"
+        lines.append("    " + row_str)
+        lines.append(r"    \hline")
+    lines.append(r"  \end{tabular}")
+    lines.append(r"\end{table}")
+    lines.append("")
+    lines.append(r"\end{document}")
+
+    latex_str = "\n".join(lines)
+
+    # ask where to save, relative to project root (one level above Scripts)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    print("\n==============================")
+    print("Saving LaTeX table (standalone document)")
+    print("==============================")
+    print("Project directory:", project_root)
+    print("\nEnter output .tex path relative to the Project folder.")
+    print("Examples:")
+    print("   table.tex")
+    print("   Latex/tested_10.tex\n")
+
+    while True:
+        out = input("Output .tex path: ").strip()
+        if not out.lower().endswith(".tex"):
+            print("Output must end with .tex")
+            continue
+
+        tex_path = os.path.join(project_root, out)
+        os.makedirs(os.path.dirname(tex_path), exist_ok=True)
+        break
+
+    with open(tex_path, "w", encoding="utf-8") as f:
+        f.write(latex_str)
+
+    print("\nLaTeX table saved as:\n  ", tex_path)
+    print("You can compile this file directly (pdflatex / LaTeX Workshop).")
     return df
