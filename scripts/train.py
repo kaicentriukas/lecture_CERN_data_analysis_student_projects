@@ -12,6 +12,7 @@ import types
 import os
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 # -------------------------------
@@ -224,6 +225,38 @@ with open("tokenizer.pkl", "wb") as f:
     pickle.dump(tokenizer, f)
 
 print("Training finished successfully!")
+
+# -------------------------------
+# Plot training curves
+# -------------------------------
+try:
+    hist = history.history
+    epochs_range = range(1, len(hist.get('loss', [])) + 1)
+
+    plt.figure(figsize=(10, 4))
+    # Loss plot
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs_range, hist.get('loss', []), label='train')
+    plt.plot(epochs_range, hist.get('val_loss', []), label='val')
+    plt.title('Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    # Accuracy plot
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs_range, hist.get('accuracy', []), label='train')
+    plt.plot(epochs_range, hist.get('val_accuracy', []), label='val')
+    plt.title('Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig('training_curves.png')
+    print('Saved training curves to training_curves.png')
+except Exception as e:
+    print('[WARN] Could not plot training curves:', e)
 
 # -------------------------------
 # Training finished, now run inference
