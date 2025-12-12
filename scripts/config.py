@@ -5,7 +5,7 @@ BATCH_SIZE = 6
 DATA_LIMIT = 100000
 SEED = 45
 
-# Image size used across dataset preprocessing and prediction (height, width)
+#Image size used across dataset preprocessing and prediction (height, width)
 IMAGE_SIZE = (60, 120)
 
 # Prediction defaults (can be overridden via CLI in predict.py)
@@ -21,4 +21,4 @@ PREDICT_TOPK = 10  # e.g., 10
 PREDICT_TOPP = 0.9  # e.g., 0.9
 PREDICT_MIN_LEN = 8
 PREDICT_REPEAT_PENALTY = 0.1
-PREDICT_NGRAM_REPEAT = 1
+PREDICT_NGRAM_REPEAT = 3
