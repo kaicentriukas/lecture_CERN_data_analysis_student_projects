@@ -4,10 +4,10 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 from PIL import Image
 from datasets import load_dataset
+from config import IMAGE_SIZE
 
-# Image size (height, width). Slightly reduced to ease VRAM while
-# preserving symbol legibility.
-IMG_SIZE = (60, 120)
+# Image size (height, width) centralized in config
+IMG_SIZE = IMAGE_SIZE
 
 
 # ---------------------------------------------------------
