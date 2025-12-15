@@ -11,7 +11,7 @@ SEED = 45
 IMAGE_SIZE = (60, 120)
 
 # Prediction defaults (can be overridden via CLI in predict.py)
-PREDICT_IMAGE = "../dataset/hand_data/prediction_test_8.jpg"
+PREDICT_IMAGE = "../dataset/hand_data/prediction_test_9.jpg"
 PREDICT_BEAM = 5  # 1=greedy; try 5 for better results
 PREDICT_LENGTH_NORM = 0.7
 PREDICT_MODEL = "best_model.h5"  # None -> prefer best_model.h5
