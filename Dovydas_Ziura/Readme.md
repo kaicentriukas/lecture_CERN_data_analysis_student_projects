@@ -55,13 +55,7 @@ Run inference on validation examples or your own image:
 ```powershell
 conda activate tf2-gpu
 cd "c:\Users\dovyd\OneDrive\Dokumentai\Univeras\CERN data analysis\final_project\scripts"
-python .\predict.py --image ..\dataset\math_pngs\formula_098.png --beam 5 --output decoded.txt
-```
-	- `--image <path>`: input image path
-	- `--beam <N>`: beam size (1=greedy)
-	- `--model <path>`: explicit model file
-	- `--length-norm <x>`: length normalization exponent
-	- `--output <path>`: write decoded LaTeX to a file
+python .\predict.py (Image path could be changed in config.py)
 
 ### Batch Prediction & CSV
 Predict multiple images at once and save a CSV for quick evaluation. You can provide a list, a glob pattern, or a numeric range.
@@ -71,33 +65,24 @@ Examples:
 # 1) Glob all JPGs in a folder
 python .\predict.py --glob ..\dataset\hand_data\*.jpg --beam 5 --csv ..\output\predictions.csv
 
+	- `--image <path>`: input image path
+	- `--beam <N>`: beam size (1=greedy)
+	- `--model <path>`: explicit model file
+	- `--length-norm <x>`: length normalization exponent
+	- `--output <path>`: write decoded LaTeX to a file
+
+
 # 2) Explicit list
 python .\predict.py --images ..\dataset\hand_data\1.jpg ..\dataset\hand_data\2.jpg ..\dataset\hand_data\7.jpg --beam 5 --csv ..\output\predictions.csv
-
-# 3) Range 1..7 using name format "{:d}.jpg" in a directory
-python .\predict.py --dir ..\dataset\hand_data --range-start 1 --range-end 7 --name-format "{:d}.jpg" --beam 5 --csv ..\output\predictions.csv
-```
-CSV columns: `filename`, `prediction`, `ground_truth` (left blank for you to fill).
-
-Note: Batch prediction only reads models; it never overwrites `best_model.h5`, `model_gpu.h5`, or `model_final.h5`.
-
-### Evaluate Predictions
-After adding ground truths in the CSV, run:
-```powershell
-conda activate tf2-gpu
-cd "c:\Users\dovyd\OneDrive\Dokumentai\Univeras\CERN data analysis\final_project\scripts"
-python .\evaluate.py --csv ..\output\predictions.csv
-```
-Outputs exact-match accuracy and average Levenshtein distance, plus the top hardest examples.
 
 ## Tips for Large Datasets
 
 ## Demo
-Quick demo assuming images named `1.jpg` to `7.jpg` exist under `dataset/hand_data`:
+Quick demo assuming images named `1.jpg` to `9.jpg` exist under `dataset/hand_data`:
 ```powershell
 conda activate tf2-gpu
 cd "c:\Users\dovyd\OneDrive\Dokumentai\Univeras\CERN data analysis\final_project\scripts"
-python .\predict.py --dir ..\dataset\hand_data --range-start 1 --range-end 7 --beam 5 --csv ..\output\demo_predictions.csv
+python .\predict.py --dir ..\dataset\hand_data --range-start 1 --range-end 9 --beam 5 --csv ..\output\demo_predictions.csv
 ```
 Open the CSV in your editor and add the real LaTeX in the `ground_truth` column for quick evaluation.
 
