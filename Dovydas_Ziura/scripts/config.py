@@ -3,8 +3,7 @@ MAX_SEQ_LEN = 120
 BATCH_SIZE = 6
 BATCH_SIZE = 6
 # Default to 40000 samples; can be overridden via CLI in train.py
-DATA_LIMIT = 100000
-DATA_LIMIT = 100000
+DATA_LIMIT = 40000
 SEED = 45
 
 #Image size used across dataset preprocessing and prediction (height, width)

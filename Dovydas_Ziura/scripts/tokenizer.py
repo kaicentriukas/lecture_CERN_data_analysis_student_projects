@@ -10,8 +10,9 @@ def create_char_tokenizer(latex_texts, num_chars=5000):
     """
     Character-level tokenizer with single-char BOS/EOS tokens.
     """
-    # Add BOS/EOS to each formula
-    enhanced_texts = [BOS_TOKEN + t + EOS_TOKEN for t in latex_texts]
+    enhanced_texts = []
+    for t in latex_texts:
+        enhanced_texts.append(BOS_TOKEN + t + EOS_TOKEN)
 
     tok = Tokenizer(
         num_words=num_chars,
@@ -28,7 +29,9 @@ def texts_to_sequences(tok, texts, max_len=150):
     """
     Converts a list of strings to padded sequences with BOS/EOS added.
     """
-    enhanced = [BOS_TOKEN + t + EOS_TOKEN for t in texts]
+    enhanced = []
+    for t in texts:
+        enhanced.append(BOS_TOKEN + t + EOS_TOKEN)
     sequences = tok.texts_to_sequences(enhanced)
     padded = pad_sequences(
         sequences,

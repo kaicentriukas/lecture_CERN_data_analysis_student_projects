@@ -87,7 +87,7 @@ def preprocess_image(img):
 # ---------------------------------------------------------
 # EXTREMELY FAST TF.DATA CREATION
 # ---------------------------------------------------------
-def create_tf_dataset(images, sequences, batch_size=32, augment=False):
+def create_tf_dataset(images, sequences, batch_size=32):
     """
     This version converts *everything* to TensorFlow tensors first,
     then slices without Python overhead. 10–20× faster.

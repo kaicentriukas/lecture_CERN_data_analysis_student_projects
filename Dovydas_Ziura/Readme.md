@@ -2,8 +2,6 @@
 
 This project trains a compact CNN+LSTM model to recognize handwritten math expressions and output LaTeX. It targets a modest GPU (GTX 1650 2GB) and includes a streaming dataset pipeline, scheduled sampling, preview decoding, beam search, and plotting of training curves.
 
-## What A README Is
-- A README explains what the project does, how to set it up, how to run it, and how to troubleshoot common issues. It’s the first document someone reads to understand and use your repo.
 
 ## Features
 - Streaming `tf.data` pipeline for big datasets (100k–200k) without huge RAM spikes
@@ -47,7 +45,7 @@ Run training with safe defaults for a 2GB GPU:
 ```powershell
 conda activate tf2-gpu
 cd "c:\Users\dovyd\OneDrive\Dokumentai\Univeras\CERN data analysis\final_project\scripts"
-python .\train.py --batch-size 6 --data-limit 40000 --epochs 20
+python .\train.py --batch-size 6 --data-limit 40000 --epochs 20 (these could also be changed in config.py)
 ```
 
 Outputs:
